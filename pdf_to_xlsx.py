@@ -162,12 +162,41 @@ def extract_table(pdf_path):
 
     return rows
 
+def to_cell_value(text):
+    """
+    Convert genuinely numeric extracted text into a real Python number, so
+    Excel/Numbers treats it (and aligns it) the same way it would a number
+    you typed in yourself, rather than as plain text.
+
+    Whole numbers only convert if doing so provably loses nothing -- the
+    round trip back to text has to match the original exactly. This
+    protects things like a leading-zero code ("007") that would otherwise
+    silently lose its zeros by becoming the number 7. Decimals convert
+    more freely, since a difference like "42.50" becoming 42.5 is just
+    numeric formatting, not lost meaning.
+    """
+    try:
+        as_int = int(text)
+        if str(as_int) == text:
+            return as_int
+    except (ValueError, TypeError):
+        pass
+
+    if "." in text:
+        try:
+            return float(text)
+        except (ValueError, TypeError):
+            pass
+
+    return text
+
+
 def write_spreadsheet(rows):
     wb = Workbook()
     sheet = wb.active
     for row_index, row in enumerate(rows, start=1):
         for col_index, value in enumerate(row, start=1):
-            cell_value = value if value is not None else ""
+            cell_value = to_cell_value(value) if value is not None else ""
             sheet.cell(row=row_index, column=col_index, value=cell_value)
     return wb
 
@@ -175,6 +204,7 @@ def style_spreadsheet(wb):
     sheet = wb.active
     header_font = Font(bold=True)
     rtl_alignment = Alignment(horizontal="right", readingOrder=2, wrap_text=True)
+    wrap_alignment = Alignment(wrap_text=True)
     column_widths = {}
 
     for row_index, row in enumerate(sheet.iter_rows(), start=1):
@@ -185,6 +215,8 @@ def style_spreadsheet(wb):
             value = cell.value
             if value and contains_hebrew(str(value)):
                 cell.alignment = rtl_alignment
+            else:
+                cell.alignment = wrap_alignment
 
             length = len(str(value)) if value else 0
             current_max = column_widths.get(cell.column_letter, 0)
