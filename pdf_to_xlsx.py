@@ -17,32 +17,38 @@ from bidi.algorithm import get_display
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment
 
-
 def contains_hebrew(text):
     return any("\u0590" <= ch <= "\u05FF" for ch in text)
 
-
-def extract_words_by_line(page, bbox):
+def assign_words_to_cells(page, table):
     """
-    Get every word inside a cell's bounding box, grouped by which line
-    of text it's on (cells can wrap across multiple lines), each line
-    sorted by physical left-to-right position on the page.
+    Get every word on the page once, and assign each one to whichever
+    table cell it overlaps the most (reusing the same overlap_area idea
+    used for annotations below). More robust than requiring a word be
+    fully contained in a cell (which can silently drop text that pokes
+    out even slightly) or accepting any overlap at all (which can pick
+    up stray slivers bleeding in from a neighboring cell).
     """
-    cropped = page.within_bbox(bbox)
-    words = cropped.extract_words()
+    cell_words = {}
 
-    lines = {}
-    for word in words:
-        line_key = round(word["top"])
-        lines.setdefault(line_key, []).append(word)
+    for word in page.extract_words():
+        word_bbox = (word["x0"], word["top"], word["x1"], word["bottom"])
+        best_position = None
+        best_area = 0
 
-    ordered_lines = []
-    for key in sorted(lines.keys()):
-        line_words = sorted(lines[key], key=lambda w: w["x0"])
-        ordered_lines.append(line_words)
+        for row_index, row in enumerate(table.rows):
+            for col_index, cell_bbox in enumerate(row.cells):
+                if cell_bbox is None:
+                    continue
+                area = overlap_area(word_bbox, cell_bbox)
+                if area > best_area:
+                    best_area = area
+                    best_position = (row_index, col_index)
 
-    return ordered_lines
+        if best_position is not None:
+            cell_words.setdefault(best_position, []).append(word)
 
+    return cell_words
 
 def join_line_words(line_words, gap_threshold=1.0):
     """
@@ -63,18 +69,22 @@ def join_line_words(line_words, gap_threshold=1.0):
         previous_word = word
     return "".join(parts)
 
-
-def extract_cell_text(page, bbox):
-    if bbox is None:
-        return None
-
-    lines = extract_words_by_line(page, bbox)
-    if not lines:
+def words_to_cell_text(words):
+    if not words:
         return ""
 
-    fixed_lines = [get_display(join_line_words(line)) for line in lines]
-    return "\n".join(fixed_lines)
+    lines = {}
+    for word in words:
+        line_key = round(word["top"])
+        lines.setdefault(line_key, []).append(word)
 
+    ordered_lines = []
+    for key in sorted(lines.keys()):
+        line_words = sorted(lines[key], key=lambda w: w["x0"])
+        ordered_lines.append(line_words)
+
+    fixed_lines = [get_display(join_line_words(line)) for line in ordered_lines]
+    return "\n".join(fixed_lines)
 
 def overlap_area(rect1, rect2):
     x0 = max(rect1[0], rect2[0])
@@ -85,12 +95,11 @@ def overlap_area(rect1, rect2):
         return 0
     return (x1 - x0) * (bottom - top)
 
-
 def extract_text_annotations(page):
     """
     Text typed into a PDF via Preview's Markup/Form-filling tools lives in
     a separate "annotations" layer, not in the page's regular content --
-    so it's invisible to extract_cell_text entirely. This pulls out any
+    so it's invisible to normal table-text extraction entirely. This pulls
     annotation that actually has typed text in it.
     """
     annotations = []
@@ -100,7 +109,6 @@ def extract_text_annotations(page):
             bbox = (annot["x0"], annot["top"], annot["x1"], annot["bottom"])
             annotations.append((bbox, contents))
     return annotations
-
 
 def apply_annotations(page, table, rows):
     """
@@ -129,7 +137,6 @@ def apply_annotations(page, table, rows):
 
     return rows
 
-
 def extract_table(pdf_path):
     with pdfplumber.open(pdf_path) as pdf:
         first_page = pdf.pages[0]
@@ -138,15 +145,22 @@ def extract_table(pdf_path):
             raise ValueError("No table with visible gridlines found on the first page.")
         table = tables[0]
 
+        cell_words = assign_words_to_cells(first_page, table)
+
         rows = []
-        for row in table.rows:
-            row_values = [extract_cell_text(first_page, bbox) for bbox in row.cells]
+        for row_index, row in enumerate(table.rows):
+            row_values = []
+            for col_index, cell_bbox in enumerate(row.cells):
+                if cell_bbox is None:
+                    row_values.append(None)
+                else:
+                    words = cell_words.get((row_index, col_index), [])
+                    row_values.append(words_to_cell_text(words))
             rows.append(row_values)
 
         rows = apply_annotations(first_page, table, rows)
 
     return rows
-
 
 def write_spreadsheet(rows):
     wb = Workbook()
@@ -156,7 +170,6 @@ def write_spreadsheet(rows):
             cell_value = value if value is not None else ""
             sheet.cell(row=row_index, column=col_index, value=cell_value)
     return wb
-
 
 def style_spreadsheet(wb):
     sheet = wb.active
@@ -182,11 +195,11 @@ def style_spreadsheet(wb):
 
     return wb
 
-
 def merge_spanned_cells(wb, rows):
     """
     rows still has None exactly where the PDF's table had a merged cell
-    (see extract_cell_text). For each row, find every run of one real
+    (see extract_table, where a cell's bbox being None is what produces
+    this). For each row, find every run of one real
     value followed by one-or-more Nones, and merge that same span in the
     spreadsheet -- reproducing the PDF's original merged layout.
     """
@@ -214,13 +227,11 @@ def merge_spanned_cells(wb, rows):
 
     return wb
 
-
 def build_spreadsheet(rows, output_path):
     wb = write_spreadsheet(rows)
     style_spreadsheet(wb)
     merge_spanned_cells(wb, rows)
     wb.save(output_path)
-
 
 def main():
     if len(sys.argv) != 3:
@@ -233,7 +244,6 @@ def main():
 
     print(f"Extracted {len(rows)} rows x {len(rows[0])} columns.")
     print(f"Saved to {output_path}")
-
 
 if __name__ == "__main__":
     main()
