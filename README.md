@@ -12,8 +12,8 @@ locally — no PDF content is ever sent to a cloud service or third-party AI.
 
 - Extracts a gridlined table from the first page of a PDF, preserving
   headers, row labels, and multi-line cells.
-- Correctly handles right-to-left text (e.g. Hebrew), including cells that
-  mix Hebrew with numbers or other scripts.
+- Correctly handles right-to-left text (e.g. Arabic, Hebrew), including cells that
+  mix it with numbers or other scripts.
 - Fixes a PDF-internal "phantom space" artifact that can otherwise split a
   single word into two.
 - Reproduces merged cells from the original PDF as merged cells in the
@@ -79,24 +79,28 @@ right-click menu, saving the `.xlsx` alongside the original PDF:
 
 ## How it works
 
-The pipeline is four small, independent stages:
+The pipeline has four conceptual stages, each solving one problem:
 
-1. **`extract_table`** — reads the PDF's first page, finds a table by its
-   gridlines (via `pdfplumber`'s `find_tables`), and reads each cell's text
-   by measuring the actual physical gaps between words rather than trusting
-   pdfplumber's own space-character detection (which can be fooled by a PDF
-   producing a misplaced space). Right-to-left text is corrected per line
-   using the Unicode Bidirectional Algorithm (`python-bidi`). Separately,
-   any text added via PDF annotations (e.g. Preview's Markup tool) is
-   matched to whichever cell it physically overlaps most and placed there.
-2. **`write_spreadsheet`** — writes the extracted values into a new
-   workbook, one cell at a time.
-3. **`style_spreadsheet`** — bolds the header row, right-aligns and sets
-   correct reading order on any cell containing Hebrew (so Excel doesn't
-   guess the wrong direction based on a cell's first character), and
-   auto-sizes each column.
-4. **`merge_spanned_cells`** — reproduces any merged cells from the original
-   PDF table as merged cells in the spreadsheet.
+1. **Find the table and read its cells.** Locate a gridlined table on the
+   PDF's first page, then figure out each cell's actual text — correcting
+   for a couple of real-world PDF quirks along the way (space characters
+   that don't correspond to real gaps between words; text that visually
+   spans multiple grid cells). Right-to-left text is reordered into correct
+   reading order. Text added via PDF annotations (e.g. Preview's Markup
+   tool), which lives outside the page's normal text entirely, is matched
+   to whichever cell it visually overlaps and placed there.
+2. **Write the values into a spreadsheet.** Nothing clever here — just
+   placing each extracted value into the matching cell of a new workbook.
+3. **Style it.** Bold the header row, auto-size columns, and make sure
+   right-to-left cells are actually displayed right-to-left rather than
+   guessed at (Excel's own guess can be wrong depending on what character
+   a cell happens to start with).
+4. **Reproduce merged cells.** Any cell that visually spanned multiple
+   columns in the original PDF is merged the same way in the output.
+
+For the actual technique behind each of these, the code itself is the
+source of truth — every non-obvious decision has a comment explaining why,
+right where the decision was made.
 
 ## Known limitations
 
@@ -110,7 +114,7 @@ The pipeline is four small, independent stages:
 
 ## Credits
 
-Built collaboratively with Claude Sonnet 5(Anthropic) — every design decision (what
+Built collaboratively with Claude Sonnet 5 (Anthropic) — every design decision (what
 to extract, how to handle each bug, where each piece of logic should live)
 was mine; Claude wrote the implementing code and helped diagnose each bug
 against the real PDF.
