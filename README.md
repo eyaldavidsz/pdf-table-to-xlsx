@@ -114,5 +114,5 @@ right where the decision was made.
 
 ## Credits
 
-Built collaboratively with Claude Sonnet 5 (Anthropic) — I contributed to design decisions (what
-to extract, how to handle each bug, where each piece of logic should live), reviewed and tested the code; Claude wrote the implementing code and helped diagnose bugs against the real PDF.
+Built collaboratively with Claude Sonnet 5 (Anthropic) — I contributed to the design decisions (what
+to extract, how to handle each bug, where each piece of logic should live), reviewed, and tested the code. Claude wrote the code and helped diagnose bugs.
