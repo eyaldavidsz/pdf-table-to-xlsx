@@ -17,6 +17,18 @@ from bidi.algorithm import get_display
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment
 
+MIRRORED_BRACKETS = {
+    "(": ")", ")": "(",
+    "[": "]", "]": "[",
+    "{": "}", "}": "{",
+    "<": ">", ">": "<",
+}
+
+
+def mirror_brackets(text):
+    return "".join(MIRRORED_BRACKETS.get(ch, ch) for ch in text)
+
+
 def contains_hebrew(text):
     return any("\u0590" <= ch <= "\u05FF" for ch in text)
 
@@ -83,7 +95,10 @@ def words_to_cell_text(words):
         line_words = sorted(lines[key], key=lambda w: w["x0"])
         ordered_lines.append(line_words)
 
-    fixed_lines = [get_display(join_line_words(line)) for line in ordered_lines]
+    fixed_lines = [
+        get_display(mirror_brackets(join_line_words(line)))
+        for line in ordered_lines
+    ]
     return "\n".join(fixed_lines)
 
 def overlap_area(rect1, rect2):
