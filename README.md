@@ -1,12 +1,12 @@
 # pdf-to-xlsx
 
 Converts a PDF containing a gridlined table into a `.xlsx` spreadsheet with
-the same headers, row labels, and layout — whether the PDF is a blank
+the same headers, row labels, and layout - whether the PDF is a blank
 template someone sent you to fill in, or one that already has some cells
 filled in (including text added via Preview's Markup/Form-filling tools).
 
 Built to avoid retyping table structures by hand, and to run entirely
-locally — no PDF content is ever sent to a cloud service or third-party AI.
+locally - no PDF content is ever sent to a cloud service or third-party AI.
 
 ## Features
 
@@ -82,14 +82,14 @@ right-click menu, saving the `.xlsx` alongside the original PDF:
 The pipeline has four conceptual stages, each solving one problem:
 
 1. **Find the table and read its cells.** Locate a gridlined table on the
-   PDF's first page, then figure out each cell's actual text — correcting
+   PDF's first page, then figure out each cell's actual text - correcting
    for a couple of real-world PDF quirks along the way (space characters
    that don't correspond to real gaps between words; text that visually
    spans multiple grid cells). Right-to-left text is reordered into correct
    reading order. Text added via PDF annotations (e.g. Preview's Markup
    tool), which lives outside the page's normal text entirely, is matched
    to whichever cell it visually overlaps and placed there.
-2. **Write the values into a spreadsheet.** Nothing clever here — just
+2. **Write the values into a spreadsheet.** Nothing clever here - just
    placing each extracted value into the matching cell of a new workbook.
 3. **Style it.** Bold the header row, auto-size columns, and make sure
    right-to-left cells are actually displayed right-to-left rather than
@@ -99,20 +99,20 @@ The pipeline has four conceptual stages, each solving one problem:
    columns in the original PDF is merged the same way in the output.
 
 For the actual technique behind each of these, the code itself is the
-source of truth — every non-obvious decision has a comment explaining why,
+source of truth - every non-obvious decision has a comment explaining why,
 right where the decision was made.
 
 ## Known limitations
 
 - Only the first page of the PDF is scanned, and only the first table found
   on it.
-- Requires the table to have visible gridlines — tables formed only by
+- Requires the table to have visible gridlines - tables formed only by
   aligned whitespace (no drawn borders) aren't detected.
 - The "phantom space" fix uses a fixed gap threshold (1pt) tuned against a
   real-world example; a PDF from a different generator with unusual letter
   spacing could in principle need this adjusted.
+- We assume each cell contains only RTL or LTR text, but in reality a cell could contain both.
 
 ## Credits
 
-Built collaboratively with Claude Sonnet 5 (Anthropic) — I contributed to the design decisions (what
-to extract, how to handle each bug, where each piece of logic should live), reviewed, and tested the code. Claude wrote the code and helped diagnose bugs.
+Built with AI-assisted development (Claude Sonnet 5): Drove the system design, spatial extraction logic, code review, and edge-case testing, using Claude to accelerate Python implementation and debugging.
